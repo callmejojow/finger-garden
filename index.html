@@ -1,0 +1,1208 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover" />
+<meta name="theme-color" content="#C3A9CE" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<title>Finger Garden 🌱</title>
+<style>
+  /* ── Monument Valley 调色板 ───────────────────────────── */
+  :root{
+    --sand:      #F7E4CE;
+    --cream:     #FBF1E4;
+    --peach:     #F3C3A6;
+    --rose:      #E6A0A6;
+    --coral:     #E8746A;
+    --lilac:     #C3A9CE;
+    --violet:    #8C7BB4;
+    --indigo:    #4B4076;
+    --night:     #2E2950;
+    --mint:      #7FC8BC;
+    --gold:      #F0C46A;
+    --ink:       #FBF1E4;
+    --soft:      0 18px 44px rgba(46,41,80,.28);
+  }
+  *{ box-sizing:border-box; margin:0; padding:0; }
+  html,body{ height:100%; overscroll-behavior:none; }
+  body{
+    color:var(--ink);
+    touch-action: manipulation;              /* 关掉双击缩放 */
+    -webkit-user-select:none; user-select:none;
+    -webkit-tap-highlight-color: transparent;
+    -webkit-text-size-adjust: 100%;
+    font-family: "Avenir Next", "Futura", -apple-system, BlinkMacSystemFont,
+                 "PingFang SC", "Helvetica Neue", Arial, sans-serif;
+    overflow:hidden;
+    background:
+      radial-gradient(120% 80% at 78% 6%,  rgba(240,196,106,.55) 0%, rgba(240,196,106,0) 55%),
+      radial-gradient(100% 70% at 12% 92%, rgba(127,200,188,.42) 0%, rgba(127,200,188,0) 60%),
+      linear-gradient(168deg, #F7E4CE 0%, #F0C0B4 32%, #C3A9CE 62%, #8C7BB4 84%, #4B4076 100%);
+  }
+
+  /* 远景：Monument Valley 式的等距几何剪影 */
+  #scenery{
+    position:fixed; inset:0; z-index:0;
+    pointer-events:none;
+    opacity:.55;
+  }
+
+  #app{ position:fixed; inset:0; z-index:1; }
+
+  /* 舞台 = 摄像头画面按原比例 contain 之后的实际矩形 */
+  #stage{
+    position:absolute;
+    overflow:hidden;
+    background:#2E2950;
+    border-radius: 20px;
+    box-shadow:
+      0 0 0 6px rgba(251,241,228,.86),
+      0 0 0 7px rgba(140,123,180,.5),
+      var(--soft);
+  }
+  #video{
+    position:absolute; inset:0;
+    width:100%; height:100%;
+    object-fit: fill;              /* stage 本身即原比例，fill 不会变形 */
+    transform: scaleX(-1);         /* 镜像，自拍视角 */
+    display:block;
+    filter: saturate(.86) contrast(1.03) brightness(1.02);
+  }
+  /* 把摄像头画面调成 MV 的柔和色调（不遮挡内容） */
+  #grade{
+    position:absolute; inset:0;
+    pointer-events:none;
+    background:
+      linear-gradient(180deg, rgba(140,123,180,.42) 0%, rgba(243,195,166,.16) 48%, rgba(127,200,188,.34) 100%);
+    mix-blend-mode: soft-light;
+  }
+  #vignette{
+    position:absolute; inset:0;
+    pointer-events:none;
+    background: radial-gradient(115% 92% at 50% 46%, rgba(46,41,80,0) 52%, rgba(46,41,80,.42) 100%);
+  }
+  #stage canvas{
+    position:absolute; inset:0; z-index:2;
+    width:100% !important; height:100% !important;
+    pointer-events:none;
+  }
+
+  /* 中间偏上的魔法文字 */
+  #magic{
+    position:absolute;
+    left:50%; top:24%;
+    transform: translate(-50%, -18px);
+    text-align:center;
+    opacity:0;
+    transition: opacity .7s ease, transform .7s cubic-bezier(.2,.8,.2,1);
+    pointer-events:none;
+    white-space:nowrap;
+    z-index:5;                       /* 必须在 three 画布之上 */
+    padding: 34px 58px;
+  }
+  /* 文字后面的柔光底，保证在任何摄像头画面上都读得清 */
+  #magic::before{
+    content:"";
+    position:absolute; inset:-10% -6%;
+    background: radial-gradient(60% 60% at 50% 50%, rgba(46,41,80,.62) 0%, rgba(46,41,80,.34) 46%, rgba(46,41,80,0) 78%);
+    filter: blur(6px);
+    z-index:-1;
+  }
+  #magic.show{ opacity:1; transform: translate(-50%, 0); }
+  #magic .rune{
+    display:block; width:22px; height:22px; margin:0 auto 16px;
+    background: var(--gold);
+    transform: rotate(45deg);
+    box-shadow: 0 0 26px rgba(240,196,106,.85);
+  }
+  #magic .l1{
+    font-size: clamp(19px, 3.9vw, 48px);
+    font-weight: 500;
+    letter-spacing:.14em;
+    color: var(--cream);
+    text-shadow: 0 4px 22px rgba(46,41,80,.75), 0 0 34px rgba(243,195,166,.5);
+  }
+  #magic .l2{
+    margin-top:.5em;
+    font-size: clamp(13px, 2.4vw, 28px);
+    font-weight: 400;
+    letter-spacing:.42em;
+    text-indent:.42em;
+    color: var(--gold);
+    text-shadow: 0 3px 16px rgba(46,41,80,.7);
+  }
+  #magic .bar{
+    width: 118px; height:1px; margin:18px auto 0;
+    background: linear-gradient(90deg, transparent, rgba(251,241,228,.85), transparent);
+  }
+
+  /* HUD */
+  #hud{
+    position:fixed;
+    left: calc(16px + env(safe-area-inset-left));
+    bottom: calc(14px + env(safe-area-inset-bottom));
+    z-index:6;
+    padding:9px 15px;
+    border-radius:14px;
+    background: rgba(251,241,228,.82);
+    color: var(--indigo);
+    font-size:12px; line-height:1.75; letter-spacing:.03em;
+    box-shadow: 0 10px 24px rgba(46,41,80,.22);
+    pointer-events:none;
+    font-variant-numeric: tabular-nums;
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  #hud b{ color: var(--coral); font-weight:700; }
+  #hud .sub{ color:#7d74a3; }
+
+  /* 开场 / 报错遮罩 */
+  #intro{
+    position:fixed; inset:0; z-index:20;
+    display:grid; place-items:center;
+    text-align:center;
+    padding: calc(24px + env(safe-area-inset-top)) calc(20px + env(safe-area-inset-right))
+             calc(24px + env(safe-area-inset-bottom)) calc(20px + env(safe-area-inset-left));
+    overflow-y:auto; -webkit-overflow-scrolling:touch;
+    background:
+      radial-gradient(120% 80% at 78% 6%,  rgba(240,196,106,.5) 0%, rgba(240,196,106,0) 55%),
+      linear-gradient(168deg, #F7E4CE 0%, #F0C0B4 34%, #C3A9CE 64%, #8C7BB4 86%, #4B4076 100%);
+  }
+  #intro.hidden{ display:none; }
+  #intro .card{
+    position:relative;
+    max-width: 620px;
+    padding: 44px 40px 40px;
+    border-radius: 26px;
+    background: rgba(251,241,228,.9);
+    box-shadow: var(--soft), inset 0 0 0 1px rgba(140,123,180,.25);
+  }
+  #tower{ display:block; margin:0 auto 6px; }
+  #intro h1{
+    font-size: clamp(24px,4.4vw,40px);
+    font-weight:500;
+    letter-spacing:.22em; text-indent:.22em;
+    color: var(--indigo);
+  }
+  #intro .tagline{
+    margin-top:10px;
+    font-size:12px; letter-spacing:.34em; text-indent:.34em;
+    color: var(--violet); text-transform: uppercase;
+  }
+  #intro .keys{
+    margin-top:22px; font-size:23px; letter-spacing:.2em;
+    padding:12px 0;
+    border-top:1px solid rgba(140,123,180,.28);
+    border-bottom:1px solid rgba(140,123,180,.28);
+  }
+  #intro p{
+    margin-top:20px; color:#6b628f; font-size:13.5px; line-height:2.05;
+    max-width:44ch; margin-left:auto; margin-right:auto;
+  }
+  #start{
+    margin-top:28px;
+    appearance:none; border:0; cursor:pointer;
+    padding:15px 44px; border-radius:999px;
+    background: linear-gradient(180deg, #F09A8C, #E8746A);
+    color: #FFF6EE; font-size:16px; font-weight:600; letter-spacing:.16em; text-indent:.16em;
+    box-shadow: 0 12px 26px rgba(232,116,106,.4);
+    transition: transform .18s cubic-bezier(.2,.8,.2,1), box-shadow .18s ease;
+  }
+  #start:hover{ transform: translateY(-3px); box-shadow:0 18px 32px rgba(232,116,106,.46); }
+  #start:disabled{ opacity:.55; cursor:progress; transform:none; }
+  #err{ margin-top:18px; color:#c0504a; font-size:12.5px; line-height:1.9; max-width:52ch; margin-inline:auto; }
+
+  /* 语言切换 */
+  #lang{
+    position:fixed;
+    top: calc(14px + env(safe-area-inset-top));
+    right: calc(16px + env(safe-area-inset-right));
+    z-index:30;
+    display:flex; gap:2px; padding:3px;
+    border-radius:999px;
+    background: rgba(251,241,228,.86);
+    box-shadow: 0 8px 22px rgba(46,41,80,.22);
+    -webkit-backdrop-filter: blur(6px);
+    backdrop-filter: blur(6px);
+  }
+  #lang button{
+    appearance:none; border:0; cursor:pointer;
+    padding:6px 15px; border-radius:999px;
+    background:transparent;
+    color: var(--violet);
+    font: inherit; font-size:12px; font-weight:600; letter-spacing:.1em;
+    transition: background .18s ease, color .18s ease;
+  }
+  #lang button:hover{ color: var(--indigo); }
+  #lang button.on{
+    background: linear-gradient(180deg, #F09A8C, #E8746A);
+    color:#FFF6EE;
+    box-shadow: 0 4px 12px rgba(232,116,106,.35);
+  }
+
+  /* ── 小屏 / 手机 ─────────────────────────────────────── */
+  @media (max-width: 620px){
+    #intro .card{ padding: 30px 22px 30px; border-radius:22px; }
+    #tower{ width:112px; height:99px; }
+    #intro h1{ letter-spacing:.14em; text-indent:.14em; }
+    #intro .tagline{ font-size:10.5px; letter-spacing:.24em; text-indent:.24em; }
+    #intro .keys{ margin-top:16px; font-size:19px; letter-spacing:.1em; }
+    #intro p{ margin-top:16px; font-size:12.5px; line-height:1.9; }
+    #start{ margin-top:22px; padding:14px 34px; font-size:15px; width:100%; max-width:280px; }
+    #stage{ border-radius:14px; box-shadow: 0 0 0 4px rgba(251,241,228,.86), 0 0 0 5px rgba(140,123,180,.5), var(--soft); }
+    #magic{ white-space:normal; width: min(88vw, 460px); padding:22px 18px; }
+    #magic .l1{ font-size: clamp(17px, 5.6vw, 30px); letter-spacing:.06em; }
+    #magic .l2{ font-size: clamp(11px, 3.4vw, 18px); letter-spacing:.3em; text-indent:.3em; }
+    #magic .rune{ width:16px; height:16px; margin-bottom:12px; }
+    #hud{ font-size:11px; padding:7px 12px; border-radius:12px; }
+    #lang button{ padding:7px 13px; font-size:11.5px; }
+  }
+
+  /* 小屏且矮（iPhone SE 一类）：去掉装饰塔，保证一屏放得下 */
+  @media (max-width: 620px) and (max-height: 700px){
+    #tower{ display:none; }
+    #intro .card{ padding: 26px 20px; }
+    #intro .keys{ margin-top:14px; font-size:18px; }
+    #intro p{ margin-top:14px; font-size:12px; line-height:1.8; }
+    #start{ margin-top:18px; }
+  }
+
+  /* 横屏手机：竖向空间紧张，整张开场卡压进一屏，保证按钮不被折叠 */
+  @media (max-height: 540px) and (orientation: landscape){
+    #intro .card{ padding: 18px 30px; max-width: 620px; border-radius:20px; }
+    #tower{ display:none; }
+    #intro h1{ font-size:22px; letter-spacing:.16em; text-indent:.16em; }
+    #intro .tagline{ margin-top:6px; font-size:10px; letter-spacing:.24em; text-indent:.24em; }
+    #intro .keys{ margin-top:11px; padding:7px 0; font-size:17px; letter-spacing:.1em; }
+    #intro p{ margin-top:11px; font-size:12px; line-height:1.65; }
+    #start{ margin-top:15px; padding:11px 32px; font-size:14px; }
+    #err{ margin-top:10px; font-size:11.5px; line-height:1.6; }
+    #magic{ padding:18px 24px; }
+    #magic .rune{ width:14px; height:14px; margin-bottom:10px; }
+    #magic .bar{ margin-top:12px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="lang" role="group" aria-label="Language / 语言">
+  <button type="button" data-lang="zh">中文</button>
+  <button type="button" data-lang="en">EN</button>
+</div>
+
+<!-- 背景远景：Monument Valley 式的等距几何 -->
+<svg id="scenery" viewBox="0 0 1600 900" preserveAspectRatio="xMidYMax slice" aria-hidden="true">
+  <g opacity=".9">
+    <!-- 左侧阶梯塔 -->
+    <polygon points="70,760 240,858 240,700 70,602"  fill="#8C7BB4"/>
+    <polygon points="410,760 240,858 240,700 410,602" fill="#6B5C99"/>
+    <polygon points="240,540 410,602 240,700 70,602"  fill="#C3A9CE"/>
+    <polygon points="150,520 240,566 330,520 240,474" fill="#F7E4CE" opacity=".9"/>
+    <!-- 右侧塔 -->
+    <polygon points="1250,830 1400,900 1400,690 1250,620" fill="#E6A0A6"/>
+    <polygon points="1550,830 1400,900 1400,690 1550,620" fill="#C97F8C"/>
+    <polygon points="1400,560 1550,620 1400,690 1250,620" fill="#F3C3A6"/>
+    <!-- 中景小块 -->
+    <polygon points="760,880 880,930 880,820 760,770" fill="#7FC8BC" opacity=".75"/>
+    <polygon points="1000,880 1120,930 1120,830 1000,780" fill="#F0C46A" opacity=".55"/>
+    <!-- 远处的拱与月 -->
+    <circle cx="1268" cy="180" r="46" fill="#FBF1E4" opacity=".85"/>
+    <path d="M470 900 A 190 190 0 0 1 850 900 Z" fill="#4B4076" opacity=".28"/>
+  </g>
+</svg>
+
+<div id="app">
+  <div id="stage">
+    <video id="video" playsinline muted autoplay></video>
+    <div id="grade"></div>
+    <div id="vignette"></div>
+    <div id="magic">
+      <span class="rune"></span>
+      <div class="l1">you created a finger garden</div>
+      <div class="l2">you have magic</div>
+      <div class="bar"></div>
+    </div>
+  </div>
+
+  <div id="hud">
+    <div>
+      <span data-i18n="hud.plants">植物</span> <b id="hudPlants">0</b> / 30 &nbsp;·&nbsp;
+      <span data-i18n="hud.hands">手</span> <b id="hudHands">0</b> &nbsp;·&nbsp;
+      <b id="hudFps">0</b> fps
+    </div>
+    <div class="sub" data-i18n="hud.tip">拇指与其它手指捏合 → 播种</div>
+  </div>
+
+  <div id="intro">
+    <div class="card">
+      <svg id="tower" width="150" height="132" viewBox="0 0 150 132" aria-hidden="true">
+        <!-- 等距方块塔 -->
+        <polygon points="30,86 75,110 75,74 30,50"  fill="#C3A9CE"/>
+        <polygon points="120,86 75,110 75,74 120,50" fill="#8C7BB4"/>
+        <polygon points="75,38 120,50 75,74 30,50"   fill="#F3C3A6"/>
+        <polygon points="52,34 75,45 75,27 52,16"    fill="#E6A0A6"/>
+        <polygon points="98,34 75,45 75,27 98,16"    fill="#C97F8C"/>
+        <polygon points="75,10 98,16 75,27 52,16"    fill="#F7E4CE"/>
+        <circle cx="75" cy="6" r="4.5" fill="#F0C46A"/>
+      </svg>
+      <h1>Finger Garden</h1>
+      <div class="tagline" data-i18n="intro.tagline">用双手种一座花园</div>
+      <div class="keys">🌷 🌻 🌸 🌼 &nbsp; 🌹 🪷 🌺 🪻</div>
+      <p data-i18n="intro.desc" data-i18n-html>
+        用拇指去捏其余 8 根手指中的任意一根，就能在空中播下一颗种子。<br>
+        种子会落下、发芽、抽茎、长叶、开花，然后被风吹走。<br>
+        不同手指对应不同的花与不同的音阶。
+      </p>
+      <button id="start">开启摄像头</button>
+      <div id="err"></div>
+    </div>
+  </div>
+</div>
+
+<!-- MediaPipe：常规 script 标签引入，全局挂载 window.Hands / window.HAND_CONNECTIONS -->
+<script src="https://cdn.jsdelivr.net/npm/@mediapipe/hands@0.4.1675469240/hands.js" crossorigin="anonymous"></script>
+
+<!-- 现代 Three.js：ESM + importmap -->
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.169.0/build/three.module.js"
+  }
+}
+</script>
+
+<script type="module">
+import * as THREE from 'three';
+
+/* ------------------------------------------------------------------ *
+ * 0. 常量与配置
+ * ------------------------------------------------------------------ */
+
+const MP_VERSION = '0.4.1675469240';
+
+// 8 根手指（除拇指）对应的花。左右手各 4 种，共 8 种。
+// fingerIdx: 0=食指 1=中指 2=无名指 3=小指
+const FLOWERS = {
+  Left:  ['🌷', '🌻', '🌸', '🌼'],
+  Right: ['🌹', '🪷', '🌺', '🪻'],
+};
+// 8 个音阶（C 大调音阶，左手 C4-D4-E4-F4，右手 G4-A4-B4-C5）
+const NOTES = {
+  Left:  [261.63, 293.66, 329.63, 349.23],   // C4 D4 E4 F4
+  Right: [392.00, 440.00, 493.88, 523.25],   // G4 A4 B4 C5
+};
+
+const LEAF_EMOJI   = '🌿';
+const BUTTERFLIES  = ['🦋', '🦋', '🦋', '🦋', '🦋'];
+
+// Monument Valley 风格的茎色（柔和的鼠尾草绿 / 青 / 橄榄）
+const STEM_COLORS = ['#7FC8BC', '#8FBF87', '#6FAE9E', '#A8C88A', '#5F9E93', '#94C4A2'];
+
+const TIP_IDS      = [8, 12, 16, 20];  // 食指/中指/无名指/小指 指尖
+const THUMB_TIP    = 4;
+const WRIST        = 0;
+const MIDDLE_MCP   = 9;
+
+const PINCH_ON     = 0.42;   // 捏合阈值（相对手掌尺寸）
+const PINCH_OFF    = 0.62;   // 松开阈值（迟滞，避免抖动重复触发）
+
+const GROW_MIN = 3.0, GROW_MAX = 5.0;   // 发芽→开花 3~5s
+const HOLD_MIN = 5.0, HOLD_MAX = 8.0;   // 开花后停留 5~8s
+const BLOW_DUR = 2.0;                   // 被风吹走的动画时长
+
+const BUTTERFLY_THRESHOLD = 30;         // 超过 30 株植物
+const BUTTERFLY_STAY      = 5.0;        // 蝴蝶停留 5s
+const BUTTERFLY_COOLDOWN  = 12.0;       // 冷却，避免连环触发
+
+/* ------------------------------------------------------------------ *
+ * 1. DOM & 工具函数
+ * ------------------------------------------------------------------ */
+
+const stage    = document.getElementById('stage');
+const video    = document.getElementById('video');
+const intro    = document.getElementById('intro');
+const startBtn = document.getElementById('start');
+const errBox   = document.getElementById('err');
+const magicEl  = document.getElementById('magic');
+const hudPlants= document.getElementById('hudPlants');
+const hudHands = document.getElementById('hudHands');
+const hudFps   = document.getElementById('hudFps');
+
+const rand   = (a, b) => a + Math.random() * (b - a);
+const clamp  = (v, a, b) => Math.min(b, Math.max(a, v));
+const pick   = arr => arr[(Math.random() * arr.length) | 0];
+const easeOutCubic = t => 1 - Math.pow(1 - t, 3);
+const easeOutBack  = t => { const c1 = 1.70158, c3 = c1 + 1; return 1 + c3 * Math.pow(t - 1, 3) + c1 * Math.pow(t - 1, 2); };
+const easeInQuad   = t => t * t;
+
+/* ------------------------------------------------------------------ *
+ * 1.5 中英文界面（画面中央的魔法文字按设计固定为英文）
+ * ------------------------------------------------------------------ */
+
+const I18N = {
+  zh: {
+    'intro.tagline': '用双手种一座花园',
+    'intro.desc':    '用拇指去捏其余 8 根手指中的任意一根，就能在空中播下一颗种子。<br>' +
+                     '种子会落下、发芽、抽茎、长叶、开花，然后被风吹走。<br>' +
+                     '不同手指对应不同的花与不同的音阶。',
+    'btn.start':     '开启摄像头',
+    'btn.starting':  '正在启动…',
+    'btn.retry':     '重试',
+    'hud.plants':    '植物',
+    'hud.hands':     '手',
+    'hud.tip':       '拇指与其它手指捏合 → 播种',
+    'err.denied':    '摄像头权限被拒绝，请在浏览器地址栏的权限设置里允许摄像头后重试。',
+    'err.failed':    '启动失败：',
+    'err.hint':      '提示：本页需要通过 http://localhost 或 https 打开，直接双击 file:// 打开时浏览器会禁止摄像头。',
+    'err.cdn':       'MediaPipe 脚本未能从 CDN 加载，请检查网络后刷新页面。',
+  },
+  en: {
+    'intro.tagline': 'grow a garden with your hands',
+    'intro.desc':    'Pinch your thumb against any of the other 8 fingers to sow a seed in the air.<br>' +
+                     'It falls, sprouts, grows a stem and leaves, blooms — then the wind takes it away.<br>' +
+                     'Every finger carries its own flower and its own note.',
+    'btn.start':     'Enable camera',
+    'btn.starting':  'Starting…',
+    'btn.retry':     'Retry',
+    'hud.plants':    'plants',
+    'hud.hands':     'hands',
+    'hud.tip':       'pinch thumb + any finger → sow',
+    'err.denied':    'Camera permission was denied. Allow camera access in the address-bar site settings, then retry.',
+    'err.failed':    'Could not start: ',
+    'err.hint':      'Note: open this page over http://localhost or https — browsers block the camera on file:// URLs.',
+    'err.cdn':       'MediaPipe failed to load from the CDN. Check your connection and reload the page.',
+  },
+};
+
+let lang = localStorage.getItem('fg-lang');
+if (lang !== 'zh' && lang !== 'en') {
+  lang = String(navigator.language || '').toLowerCase().startsWith('zh') ? 'zh' : 'en';
+}
+let btnState = 'btn.start';        // 开始按钮当前状态
+let errState = null;               // { key, detail } —— 切换语言时需要重绘
+
+const t = k => (I18N[lang] && I18N[lang][k]) || I18N.en[k] || k;
+
+function renderError() {
+  if (!errState) { errBox.innerHTML = ''; return; }
+  if (errState.key === 'err.cdn') { errBox.textContent = t('err.cdn'); return; }
+  const head = errState.key === 'err.denied'
+    ? t('err.denied')
+    : t('err.failed') + (errState.detail || '');
+  errBox.innerHTML = head + '<br>' + t('err.hint');
+}
+
+function applyLang(next) {
+  lang = next;
+  try { localStorage.setItem('fg-lang', lang); } catch (e) { /* 隐私模式忽略 */ }
+  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
+
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const v = t(el.dataset.i18n);
+    if ('i18nHtml' in el.dataset) el.innerHTML = v; else el.textContent = v;
+  });
+  startBtn.textContent = t(btnState);
+  renderError();
+
+  document.querySelectorAll('#lang button').forEach(b => {
+    b.classList.toggle('on', b.dataset.lang === lang);
+  });
+}
+
+document.querySelectorAll('#lang button').forEach(b => {
+  b.addEventListener('click', () => applyLang(b.dataset.lang));
+});
+applyLang(lang);
+
+/* ------------------------------------------------------------------ *
+ * 2. Three.js 场景（正交相机，1 世界单位 = 1 显示像素）
+ * ------------------------------------------------------------------ */
+
+// 手机 / 平板：算力有限，降一档渲染与识别精度
+const IS_TOUCH = matchMedia('(pointer: coarse)').matches ||
+                 (navigator.maxTouchPoints > 1 && /Mac|iPad|iPhone|Android/.test(navigator.platform || ''));
+
+const renderer = new THREE.WebGLRenderer({
+  alpha: true,
+  antialias: !IS_TOUCH,                       // 移动端关抗锯齿，省 GPU
+  powerPreference: 'high-performance',
+});
+renderer.setPixelRatio(Math.min(devicePixelRatio || 1, IS_TOUCH ? 1.75 : 2));
+renderer.setClearColor(0x000000, 0);
+stage.appendChild(renderer.domElement);
+
+const scene  = new THREE.Scene();
+const camera = new THREE.OrthographicCamera(-1, 1, 1, -1, -1000, 1000);
+
+// 舞台像素尺寸（= 摄像头画面按原比例 contain 后的显示尺寸）
+// U = 与画面形状无关的尺寸基准：16:9 横屏时等于 H，9:16 竖屏时等于 W，
+//     所有花草/蝴蝶/指尖 emoji 都按它缩放，横竖屏观感一致。
+let W = 1, H = 1, U = 1;
+
+function layout() {
+  const vw = video.videoWidth  || 1280;
+  const vh = video.videoHeight || 720;
+  const cw = window.innerWidth;
+  const ch = window.innerHeight;
+
+  const scale = Math.min(cw / vw, ch / vh);   // contain：保持原比例，不拉伸
+  W = Math.round(vw * scale);
+  H = Math.round(vh * scale);
+  U = 0.75 * Math.sqrt(W * H);
+
+  stage.style.width  = W + 'px';
+  stage.style.height = H + 'px';
+  stage.style.left   = Math.round((cw - W) / 2) + 'px';
+  stage.style.top    = Math.round((ch - H) / 2) + 'px';
+
+  renderer.setSize(W, H, false);
+  camera.left = -W / 2; camera.right = W / 2;
+  camera.top  =  H / 2; camera.bottom = -H / 2;
+  camera.updateProjectionMatrix();
+}
+
+// 横竖屏切换、地址栏收起、摄像头分辨率变化都要重新排版
+window.addEventListener('resize', layout);
+window.addEventListener('orientationchange', () => { layout(); setTimeout(layout, 350); });
+video.addEventListener('resize', layout);          // iOS 旋转后视频轨道尺寸会变
+video.addEventListener('loadedmetadata', layout);
+if (window.visualViewport) window.visualViewport.addEventListener('resize', layout);
+
+// 归一化坐标(0~1, 左上原点) → 世界坐标（像素，中心原点）
+const nxToWorld = nx => (nx - 0.5) * W;
+const nyToWorld = ny => (0.5 - ny) * H;
+
+/* ------------------------------------------------------------------ *
+ * 3. Emoji / 种子 贴图缓存
+ * ------------------------------------------------------------------ */
+
+const texCache = new Map();
+
+function emojiTexture(ch) {
+  if (texCache.has(ch)) return texCache.get(ch);
+  const S = 256;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  g.font = `${Math.floor(S * 0.78)}px "Apple Color Emoji","Segoe UI Emoji","Noto Color Emoji",sans-serif`;
+  g.fillText(ch, S / 2, S * 0.54);
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  tex.anisotropy = 4;
+  texCache.set(ch, tex);
+  return tex;
+}
+
+function seedTexture() {
+  if (texCache.has('__seed')) return texCache.get('__seed');
+  const S = 128;
+  const cv = document.createElement('canvas');
+  cv.width = cv.height = S;
+  const g = cv.getContext('2d');
+  // 柔光
+  const glow = g.createRadialGradient(S/2, S/2, 4, S/2, S/2, S/2);
+  glow.addColorStop(0, 'rgba(240,196,106,.9)');
+  glow.addColorStop(1, 'rgba(240,196,106,0)');
+  g.fillStyle = glow; g.fillRect(0, 0, S, S);
+  // 种子本体
+  g.save();
+  g.translate(S/2, S/2); g.rotate(-0.35);
+  const grd = g.createLinearGradient(-16, -24, 16, 24);
+  grd.addColorStop(0, '#E6A0A6'); grd.addColorStop(1, '#8C5A4A');
+  g.fillStyle = grd;
+  g.beginPath(); g.ellipse(0, 0, 16, 24, 0, 0, Math.PI * 2); g.fill();
+  g.fillStyle = 'rgba(255,235,200,.55)';
+  g.beginPath(); g.ellipse(-5, -8, 5, 8, 0, 0, Math.PI * 2); g.fill();
+  g.restore();
+  const tex = new THREE.CanvasTexture(cv);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  texCache.set('__seed', tex);
+  return tex;
+}
+
+function makeSprite(tex, renderOrder = 0) {
+  const mat = new THREE.SpriteMaterial({
+    map: tex, transparent: true, depthTest: false, depthWrite: false,
+  });
+  const sp = new THREE.Sprite(mat);
+  sp.renderOrder = renderOrder;
+  return sp;
+}
+
+/* ------------------------------------------------------------------ *
+ * 4. 音阶（WebAudio）
+ * ------------------------------------------------------------------ */
+
+let audioCtx = null, masterGain = null;
+
+function initAudio() {
+  if (audioCtx) return;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audioCtx = new AC();
+  masterGain = audioCtx.createGain();
+  masterGain.gain.value = 0.5;
+  masterGain.connect(audioCtx.destination);
+
+  // iOS Safari：必须在用户手势里 resume + 播一段静音，之后才允许出声
+  const buf = audioCtx.createBuffer(1, 1, 22050);
+  const src = audioCtx.createBufferSource();
+  src.buffer = buf; src.connect(audioCtx.destination); src.start(0);
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+
+  // 从后台切回来时音频会被挂起
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+  });
+}
+
+function playNote(freq) {
+  if (!audioCtx) return;
+  if (audioCtx.state === 'suspended') audioCtx.resume();
+  const t0 = audioCtx.currentTime;
+  const bus = audioCtx.createGain();
+  bus.connect(masterGain);
+  bus.gain.setValueAtTime(0.0001, t0);
+  bus.gain.exponentialRampToValueAtTime(0.55, t0 + 0.012);
+  bus.gain.exponentialRampToValueAtTime(0.0001, t0 + 1.15);
+
+  // 基音 + 八度泛音，像木琴/风铃
+  [[freq, 'sine', 1], [freq * 2, 'triangle', 0.28], [freq * 3, 'sine', 0.1]].forEach(([f, type, g]) => {
+    const osc = audioCtx.createOscillator();
+    const gn  = audioCtx.createGain();
+    osc.type = type;
+    osc.frequency.setValueAtTime(f, t0);
+    gn.gain.value = g;
+    osc.connect(gn); gn.connect(bus);
+    osc.start(t0);
+    osc.stop(t0 + 1.2);
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * 5. 植物
+ * ------------------------------------------------------------------ */
+
+const STEM_SEGS = 16;
+
+class Plant {
+  constructor(nx, ny, flower, note) {
+    this.nx = nx; this.ny = ny;
+    this.vy = 0.05;                       // 归一化单位/秒，种子下落初速
+    this.groundNy = clamp(ny + rand(0.02, 0.10), 0, 0.94); // 落点（略低于捏合处）
+    this.state = 'falling';
+    this.t = 0;
+
+    this.size      = rand(0.62, 1.45);    // 植株大小随机
+    this.growDur   = rand(GROW_MIN, GROW_MAX);
+    this.holdDur   = rand(HOLD_MIN, HOLD_MAX);
+    this.heightU   = rand(0.15, 0.30) * this.size;   // 以 U 为基准，横竖屏一致
+    this.bend      = rand(-0.22, 0.22);
+    this.phase     = rand(0, Math.PI * 2);
+    this.swayAmp   = rand(0.5, 1.4);
+    this.flowerChar= flower;
+    this.note      = note;
+    this.blowDir   = Math.random() < 0.5 ? -1 : 1;
+    this.blowT     = 0;
+    this.dead      = false;
+
+    this.group = new THREE.Group();
+    scene.add(this.group);
+
+    // 茎：可变形三角带
+    this.stemPos = new Float32Array((STEM_SEGS + 1) * 2 * 3);
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.BufferAttribute(this.stemPos, 3));
+    const idx = [];
+    for (let i = 0; i < STEM_SEGS; i++) {
+      const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+      idx.push(a, b, c, b, d, c);
+    }
+    geo.setIndex(idx);
+    this.stemGeo = geo;
+    this.stemMat = new THREE.MeshBasicMaterial({
+      color: new THREE.Color(pick(STEM_COLORS)),
+      transparent: true, side: THREE.DoubleSide, depthTest: false, depthWrite: false,
+    });
+    this.stem = new THREE.Mesh(geo, this.stemMat);
+    this.stem.renderOrder = 1;
+    this.stem.visible = false;
+    this.group.add(this.stem);
+
+    // 叶子（2~3 片，左右交替）
+    this.leaves = [];
+    const leafCount = 2 + ((Math.random() * 2) | 0);
+    for (let i = 0; i < leafCount; i++) {
+      const sp = makeSprite(emojiTexture(LEAF_EMOJI), 2);
+      sp.visible = false;
+      sp.userData = {
+        at: 0.32 + i * 0.18 + rand(-0.04, 0.04),   // 沿茎的位置
+        side: i % 2 === 0 ? 1 : -1,
+        appear: 0.34 + i * 0.16,                   // 出现时的生长进度
+        scale: rand(0.75, 1.05),
+      };
+      this.leaves.push(sp);
+      this.group.add(sp);
+    }
+
+    // 花
+    this.flower = makeSprite(emojiTexture(flower), 3);
+    this.flower.visible = false;
+    this.group.add(this.flower);
+
+    // 种子
+    this.seed = makeSprite(seedTexture(), 4);
+    this.group.add(this.seed);
+  }
+
+  // 茎的参数曲线（局部坐标，基点在 0,0，单位像素）
+  pointAt(t, height) {
+    const sway = Math.sin(this.phase + t * 2.2) * this.swayAmp * this.swayNow * height * 0.06;
+    return {
+      x: this.bend * height * t * t + sway * t,
+      y: height * t,
+    };
+  }
+
+  rebuildStem(height, progress) {
+    const pos = this.stemPos;
+    const wBase = clamp(height * 0.035, 1.6, 9) ;
+    for (let i = 0; i <= STEM_SEGS; i++) {
+      const t  = (i / STEM_SEGS) * progress;
+      const p  = this.pointAt(t, height);
+      const p2 = this.pointAt(Math.min(1, t + 0.02), height);
+      let tx = p2.x - p.x, ty = p2.y - p.y;
+      const len = Math.hypot(tx, ty) || 1;
+      tx /= len; ty /= len;
+      const nxn = -ty, nyn = tx;                    // 法线
+      const w = wBase * (1 - 0.72 * (i / STEM_SEGS)) * 0.5;
+      const o = i * 6;
+      pos[o]     = p.x + nxn * w; pos[o + 1] = p.y + nyn * w; pos[o + 2] = 0;
+      pos[o + 3] = p.x - nxn * w; pos[o + 4] = p.y - nyn * w; pos[o + 5] = 0;
+    }
+    this.stemGeo.attributes.position.needsUpdate = true;
+    this.stemGeo.computeBoundingSphere();
+  }
+
+  update(dt, time) {
+    this.t += dt;
+    this.swayNow = 1;
+
+    if (this.state === 'falling') {
+      this.vy += 1.8 * dt;                 // 重力
+      this.ny += this.vy * dt;
+      if (this.ny >= this.groundNy) {
+        this.ny = this.groundNy;
+        this.state = 'growing';
+        this.t = 0;
+      }
+    } else if (this.state === 'growing') {
+      if (this.t >= this.growDur) { this.state = 'holding'; this.t = 0; }
+    } else if (this.state === 'holding') {
+      if (this.t >= this.holdDur) { this.state = 'blowing'; this.t = 0; this.blowT = 0; }
+    } else if (this.state === 'blowing') {
+      this.blowT += dt;
+      const k = this.blowT / BLOW_DUR;
+      this.nx += this.blowDir * (0.10 + 0.55 * easeInQuad(k)) * dt;
+      this.ny -= (0.05 + 0.25 * easeInQuad(k)) * dt;
+      if (this.blowT >= BLOW_DUR) this.dead = true;
+    }
+
+    // 生长进度
+    const gp = this.state === 'falling'
+      ? 0
+      : (this.state === 'growing' ? clamp(this.t / this.growDur, 0, 1) : 1);
+
+    // 摇曳幅度：吹走时剧烈
+    this.swayNow = this.state === 'blowing'
+      ? 1 + 6 * (this.blowT / BLOW_DUR)
+      : 1;
+    this.phase += dt * (this.state === 'blowing' ? 6.5 : 1.5);
+
+    // 位置与整体旋转
+    this.group.position.set(nxToWorld(this.nx), nyToWorld(this.ny), 0);
+    this.group.rotation.z = this.state === 'blowing'
+      ? -this.blowDir * easeInQuad(this.blowT / BLOW_DUR) * 2.4
+      : 0;
+
+    // 种子
+    const seedShow = this.state === 'falling' || gp < 0.16;
+    this.seed.visible = seedShow;
+    if (seedShow) {
+      const s = clamp(U * 0.022 * this.size, 7, 30);
+      const fade = this.state === 'falling' ? 1 : 1 - gp / 0.16;
+      this.seed.scale.set(s, s, 1);
+      this.seed.material.opacity = fade;
+      this.seed.position.set(0, s * 0.35, 0);
+    }
+
+    // 茎（顶端不越过画面上沿）
+    const height = Math.min(U * this.heightU, this.groundNy * H * 0.92);
+    const stemP  = clamp((gp - 0.08) / 0.92, 0, 1);
+    const grown  = easeOutCubic(stemP);
+    this.stem.visible = stemP > 0.001;
+    if (this.stem.visible) this.rebuildStem(height, Math.max(0.02, grown));
+
+    // 叶子
+    for (const lf of this.leaves) {
+      const ud = lf.userData;
+      const k = clamp((gp - ud.appear) / 0.18, 0, 1);
+      lf.visible = k > 0.001 && this.stem.visible;
+      if (!lf.visible) continue;
+      const at = Math.min(ud.at, grown * 0.98);
+      const p = this.pointAt(at, height);
+      const s = U * 0.055 * this.size * ud.scale * easeOutBack(k);
+      lf.position.set(p.x + ud.side * s * 0.28, p.y, 0);
+      lf.scale.set(s * ud.side, s, 1);          // side 取负实现水平翻转
+      lf.material.rotation = ud.side * (-0.55 + Math.sin(this.phase * 0.7) * 0.08);
+    }
+
+    // 花
+    const fk = clamp((gp - 0.72) / 0.28, 0, 1);
+    this.flower.visible = fk > 0.001;
+    if (this.flower.visible) {
+      const tip = this.pointAt(grown, height);
+      const s = U * 0.085 * this.size * easeOutBack(fk);
+      this.flower.position.set(tip.x, tip.y + s * 0.32, 0);
+      this.flower.scale.set(s, s, 1);
+      this.flower.material.rotation = Math.sin(this.phase * 0.6) * 0.12;
+    }
+
+    // 淡出
+    const op = this.state === 'blowing' ? clamp(1 - this.blowT / BLOW_DUR, 0, 1) : 1;
+    this.stemMat.opacity = op;
+    this.flower.material.opacity = op;
+    this.leaves.forEach(l => { if (l.visible) l.material.opacity = op; });
+
+    // 越界即回收
+    if (this.nx < -0.4 || this.nx > 1.4 || this.ny < -0.5) this.dead = true;
+  }
+
+  dispose() {
+    scene.remove(this.group);
+    this.stemGeo.dispose();
+    this.stemMat.dispose();
+    this.flower.material.dispose();
+    this.seed.material.dispose();
+    this.leaves.forEach(l => l.material.dispose());
+  }
+}
+
+const plants = [];
+
+function sow(nx, ny, flower, note) {
+  plants.push(new Plant(nx, ny, flower, note));
+  playNote(note);
+}
+
+/* ------------------------------------------------------------------ *
+ * 6. 蝴蝶
+ * ------------------------------------------------------------------ */
+
+class Butterfly {
+  constructor(ch) {
+    this.sp = makeSprite(emojiTexture(ch), 20);
+    scene.add(this.sp);
+    this.nx = rand(0.15, 0.85);
+    this.ny = 1.12;                       // 从画面下方飞入
+    this.tx = rand(0.15, 0.85);
+    this.ty = rand(0.25, 0.62);
+    this.phase = rand(0, Math.PI * 2);
+    this.size = rand(0.75, 1.15);
+    this.t = 0;
+    this.leaving = false;
+    this.leaveT = 0;
+    this.dir = Math.random() < 0.5 ? -1 : 1;
+    this.dead = false;
+  }
+  update(dt, time) {
+    this.t += dt;
+    if (!this.leaving) {
+      // 慢慢飘向目标点，到了就换一个目标
+      this.nx += (this.tx - this.nx) * 0.7 * dt;
+      this.ny += (this.ty - this.ny) * 0.7 * dt;
+      if (Math.hypot(this.tx - this.nx, this.ty - this.ny) < 0.05) {
+        this.tx = rand(0.12, 0.88);
+        this.ty = rand(0.2, 0.7);
+      }
+    } else {
+      this.leaveT += dt;
+      this.nx += this.dir * (0.15 + 0.5 * easeInQuad(this.leaveT / 2)) * dt;
+      this.ny -= (0.12 + 0.3 * easeInQuad(this.leaveT / 2)) * dt;
+      if (this.leaveT > 2.6) this.dead = true;
+    }
+    const wob = Math.sin(time * 6 + this.phase);
+    const flap = 0.55 + 0.45 * Math.abs(Math.cos(time * 9 + this.phase)); // 扇翅
+    const s = U * 0.075 * this.size;
+    this.sp.position.set(
+      nxToWorld(this.nx) + Math.sin(time * 2.1 + this.phase) * U * 0.012,
+      nyToWorld(this.ny) + wob * U * 0.012,
+      0
+    );
+    this.sp.scale.set(s * flap * (this.leaving ? this.dir : 1), s, 1);
+    this.sp.material.rotation = wob * 0.25;
+    this.sp.material.opacity = this.leaving ? clamp(1 - this.leaveT / 2.6, 0, 1) : 1;
+    if (this.nx < -0.3 || this.nx > 1.3 || this.ny < -0.3) this.dead = true;
+  }
+  leave() { if (!this.leaving) { this.leaving = true; this.leaveT = 0; } }
+  dispose() { scene.remove(this.sp); this.sp.material.dispose(); }
+}
+
+const butterflies = [];
+let butterflyTimer = 0;
+let butterflyActive = false;
+let butterflyCooldown = 0;
+
+function spawnButterflies() {
+  butterflyActive = true;
+  butterflyTimer = 0;
+  butterflyCooldown = BUTTERFLY_COOLDOWN;
+  for (const ch of BUTTERFLIES) butterflies.push(new Butterfly(ch));
+  showMagicText();
+  // 一小段上行琶音，配合彩蛋
+  [523.25, 659.25, 783.99, 1046.5].forEach((f, i) => setTimeout(() => playNote(f), i * 120));
+}
+
+let magicHideTimer = null;
+function showMagicText() {
+  magicEl.classList.add('show');
+  clearTimeout(magicHideTimer);
+  magicHideTimer = setTimeout(() => magicEl.classList.remove('show'), 4500);
+}
+
+/* ------------------------------------------------------------------ *
+ * 7. 指尖 emoji
+ * ------------------------------------------------------------------ */
+
+// 两只手 × 4 根手指的指尖精灵；结构固定，按需显隐
+const tipSprites = {};
+for (const hand of ['Left', 'Right']) {
+  tipSprites[hand] = FLOWERS[hand].map(ch => {
+    const sp = makeSprite(emojiTexture(ch), 30);
+    sp.visible = false;
+    scene.add(sp);
+    return sp;
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * 8. MediaPipe Hands
+ * ------------------------------------------------------------------ */
+
+let hands = null;
+let latest = null;            // 最新一帧识别结果
+const pinchState = {};        // key -> bool，做迟滞判断
+
+function initHands() {
+  if (!window.Hands) throw new Error('MediaPipe 未能从 CDN 加载（window.Hands 不存在）');
+  hands = new window.Hands({
+    locateFile: f => `https://cdn.jsdelivr.net/npm/@mediapipe/hands@${MP_VERSION}/${f}`
+  });
+  hands.setOptions({
+    maxNumHands: 2,
+    modelComplexity: IS_TOUCH ? 0 : 1,   // 手机/平板用轻量模型
+
+    minDetectionConfidence: 0.6,
+    minTrackingConfidence: 0.6,
+    selfieMode: false,        // 镜像我们自己处理
+  });
+  hands.onResults(res => { latest = res; });
+}
+
+function handKey(label, i) { return (label === 'Left' ? 0 : 1) * 4 + i; }
+
+function processHands() {
+  // 全部指尖先隐藏，再按识别结果点亮
+  for (const hand of ['Left', 'Right']) tipSprites[hand].forEach(sp => sp.visible = false);
+
+  const res = latest;
+  const list = res && res.multiHandLandmarks ? res.multiHandLandmarks : [];
+  hudHands.textContent = list.length;
+  if (!list.length) { for (const k in pinchState) pinchState[k] = false; return; }
+
+  for (let h = 0; h < list.length; h++) {
+    const lm = list[h];
+    const label = (res.multiHandedness && res.multiHandedness[h])
+      ? res.multiHandedness[h].label : (h === 0 ? 'Left' : 'Right');
+    const hand = (label === 'Left' || label === 'Right') ? label : 'Right';
+
+    // 手掌尺寸，用来把捏合距离归一化（远近都适用）
+    const palm = Math.hypot(lm[WRIST].x - lm[MIDDLE_MCP].x, lm[WRIST].y - lm[MIDDLE_MCP].y) || 0.001;
+    const thumb = lm[THUMB_TIP];
+
+    for (let f = 0; f < 4; f++) {
+      const tip = lm[TIP_IDS[f]];
+      // 镜像：显示画面是 scaleX(-1) 的，所以 x 取 1-x
+      const nx = 1 - tip.x, ny = tip.y;
+
+      const sp = tipSprites[hand][f];
+      const dist  = Math.hypot(thumb.x - tip.x, thumb.y - tip.y) / palm;
+      const near  = clamp(1 - (dist - PINCH_ON) / 0.5, 0, 1);   // 越接近捏合越大
+      const s = U * (0.052 + 0.028 * near);
+      sp.visible = true;
+      sp.position.set(nxToWorld(nx), nyToWorld(ny), 0);
+      sp.scale.set(s, s, 1);
+      sp.material.opacity = 0.9;
+      sp.material.rotation = near * 0.4;
+
+      // 捏合检测（带迟滞，捏一次只播一颗种子）
+      const key = handKey(hand, f);
+      const was = !!pinchState[key];
+      if (!was && dist < PINCH_ON) {
+        pinchState[key] = true;
+        const mid = { x: (nx + (1 - thumb.x)) / 2, y: (ny + thumb.y) / 2 };
+        sow(mid.x, mid.y, FLOWERS[hand][f], NOTES[hand][f]);
+      } else if (was && dist > PINCH_OFF) {
+        pinchState[key] = false;
+      }
+    }
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * 9. 主循环
+ * ------------------------------------------------------------------ */
+
+let lastT = performance.now();
+let fpsAcc = 0, fpsCount = 0;
+
+function tick(now) {
+  requestAnimationFrame(tick);
+  const dt = Math.min(0.05, (now - lastT) / 1000);
+  lastT = now;
+  const time = now / 1000;
+
+  // fps
+  fpsAcc += dt; fpsCount++;
+  if (fpsAcc > 0.5) { hudFps.textContent = Math.round(fpsCount / fpsAcc); fpsAcc = 0; fpsCount = 0; }
+
+  processHands();
+
+  for (let i = plants.length - 1; i >= 0; i--) {
+    const p = plants[i];
+    p.update(dt, time);
+    if (p.dead) { p.dispose(); plants.splice(i, 1); }
+  }
+  hudPlants.textContent = plants.length;
+
+  // 蝴蝶彩蛋
+  if (butterflyCooldown > 0) butterflyCooldown -= dt;
+  if (!butterflyActive && butterflyCooldown <= 0 && plants.length > BUTTERFLY_THRESHOLD) {
+    spawnButterflies();
+  }
+  if (butterflyActive) {
+    butterflyTimer += dt;
+    if (butterflyTimer > BUTTERFLY_STAY) {
+      butterflies.forEach(b => b.leave());
+      butterflyActive = false;
+    }
+  }
+  for (let i = butterflies.length - 1; i >= 0; i--) {
+    const b = butterflies[i];
+    b.update(dt, time);
+    if (b.dead) { b.dispose(); butterflies.splice(i, 1); }
+  }
+
+  renderer.render(scene, camera);
+}
+
+/* ------------------------------------------------------------------ *
+ * 10. 启动
+ * ------------------------------------------------------------------ */
+
+// 移动端把识别限到 ~24fps：渲染仍是满帧，但不会把 CPU 烤到降频
+const DETECT_INTERVAL = IS_TOUCH ? 42 : 0;
+let lastSend = 0;
+
+async function detectLoop() {
+  const now = performance.now();
+  if (video.readyState >= 2 && now - lastSend >= DETECT_INTERVAL) {
+    lastSend = now;
+    try { await hands.send({ image: video }); } catch (e) { /* 单帧失败忽略 */ }
+  }
+  requestAnimationFrame(detectLoop);
+}
+
+// 玩的时候别让手机息屏
+let wakeLock = null;
+async function keepAwake() {
+  if (!('wakeLock' in navigator)) return;
+  const request = async () => {
+    try { wakeLock = await navigator.wakeLock.request('screen'); } catch (e) { /* 不支持就算了 */ }
+  };
+  await request();
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') request();
+  });
+}
+
+startBtn.addEventListener('click', async () => {
+  startBtn.disabled = true;
+  btnState = 'btn.starting';
+  startBtn.textContent = t(btnState);
+  errState = null;
+  renderError();
+  try {
+    initAudio();
+
+    // 竖屏设备请求竖向画面，避免整块黑边；移动端压低分辨率以保帧率
+    const portrait = window.innerHeight > window.innerWidth;
+    const long  = IS_TOUCH ? 960 : 1280;
+    const short = IS_TOUCH ? 540 : 720;
+    const base  = {
+      facingMode: 'user',
+      frameRate: { ideal: 30, max: 30 },
+      width:  { ideal: portrait ? short : long },
+      height: { ideal: portrait ? long : short },
+    };
+
+    let stream;
+    try {
+      stream = await navigator.mediaDevices.getUserMedia({ video: base, audio: false });
+    } catch (e) {
+      // 某些设备不支持指定分辨率组合，退回最宽松的约束
+      if (e && (e.name === 'OverconstrainedError' || e.name === 'NotFoundError')) {
+        stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user' }, audio: false });
+      } else throw e;
+    }
+
+    video.srcObject = stream;
+    await video.play();
+    await new Promise(res => {
+      if (video.videoWidth) return res();
+      video.onloadedmetadata = () => res();
+    });
+
+    layout();
+    initHands();
+    keepAwake();
+
+    intro.classList.add('hidden');
+    requestAnimationFrame(tick);
+    detectLoop();
+  } catch (e) {
+    console.error(e);
+    startBtn.disabled = false;
+    btnState = 'btn.retry';
+    startBtn.textContent = t(btnState);
+    errState = (e && e.name === 'NotAllowedError')
+      ? { key: 'err.denied' }
+      : { key: 'err.failed', detail: (e && e.message) ? e.message : String(e) };
+    renderError();
+  }
+});
+
+// CDN 没加载成功时提前提示
+window.addEventListener('load', () => {
+  if (!window.Hands) {
+    errState = { key: 'err.cdn' };
+    renderError();
+  }
+});
+</script>
+</body>
+</html>
