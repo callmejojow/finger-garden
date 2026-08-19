@@ -245,7 +245,7 @@
   /* ── 小屏 / 手机 ─────────────────────────────────────── */
   @media (max-width: 620px){
     #intro .card{ padding: 30px 22px 30px; border-radius:22px; }
-    #tower{ width:112px; height:99px; }
+    #tower{ width:112px; height:108px; }
     #intro h1{ letter-spacing:.14em; text-indent:.14em; }
     #intro .tagline{ font-size:10.5px; letter-spacing:.24em; text-indent:.24em; }
     #intro .keys{ margin-top:16px; font-size:19px; letter-spacing:.1em; }
@@ -395,15 +395,45 @@
 
   <div id="intro">
     <div class="card">
-      <svg id="tower" width="150" height="132" viewBox="0 0 150 132" aria-hidden="true">
-        <!-- 等距方块塔 -->
-        <polygon points="30,86 75,110 75,74 30,50"  fill="#C3A9CE"/>
-        <polygon points="120,86 75,110 75,74 120,50" fill="#8C7BB4"/>
-        <polygon points="75,38 120,50 75,74 30,50"   fill="#F3C3A6"/>
-        <polygon points="52,34 75,45 75,27 52,16"    fill="#E6A0A6"/>
-        <polygon points="98,34 75,45 75,27 98,16"    fill="#C97F8C"/>
-        <polygon points="75,10 98,16 75,27 52,16"    fill="#F7E4CE"/>
-        <circle cx="75" cy="6" r="4.5" fill="#F0C46A"/>
+      <svg id="tower" width="150" height="145" viewBox="0 0 150 145" aria-hidden="true">
+        <!-- 等距石台 -->
+        <polygon points="33,95 75,116 75,143 33,122"  fill="#C3A9CE"/>
+        <polygon points="117,95 75,116 75,143 117,122" fill="#8C7BB4"/>
+        <polygon points="75,74 117,95 75,116 33,95"    fill="#F3C3A6"/>
+        <!-- 石台侧面的拱门，Monument Valley 的建筑味 -->
+        <path d="M89.3 135.9 L89.3 118.1 Q94.4 108.6 99.4 113 L99.4 130.8 Z"
+              fill="#FBF1E4" opacity=".5"/>
+
+        <!-- 种进台面的小坑 -->
+        <ellipse cx="74" cy="97" rx="7.5" ry="3.6" fill="#DFA98C"/>
+
+        <!-- 茎与叶 -->
+        <path d="M75 98 C 74 85, 68 75, 71 61" stroke="#6FAE9E" stroke-width="4"
+              stroke-linecap="round" fill="none"/>
+        <ellipse cx="59" cy="81" rx="12" ry="5.6" fill="#8FBF87"
+                 transform="rotate(-28 59 81)"/>
+        <ellipse cx="86" cy="71" rx="10" ry="4.8" fill="#7FC8BC"
+                 transform="rotate(24 86 71)"/>
+
+        <!-- 几何花冠 -->
+        <g fill="#E6A0A6">
+          <circle cx="81.5" cy="49" r="7.5"/>
+          <circle cx="76.2" cy="58.1" r="7.5"/>
+          <circle cx="65.8" cy="58.1" r="7.5"/>
+          <circle cx="60.5" cy="49" r="7.5"/>
+          <circle cx="65.8" cy="39.9" r="7.5"/>
+          <circle cx="76.2" cy="39.9" r="7.5"/>
+        </g>
+        <circle cx="71" cy="49" r="5.6" fill="#F0C46A"/>
+
+        <!-- 飘出来的音符 -->
+        <g fill="#F0C46A">
+          <circle cx="108" cy="56" r="4.2"/><rect x="111" y="41" width="2.4" height="16" rx="1.2"/>
+          <circle cx="123" cy="35" r="3.4"/><rect x="125.2" y="23" width="2.1" height="13" rx="1"/>
+        </g>
+        <g fill="#8C7BB4" opacity=".75">
+          <circle cx="31" cy="59" r="3"/><rect x="32.8" y="48" width="1.9" height="12" rx=".95"/>
+        </g>
       </svg>
       <h1>Finger Garden</h1>
       <div class="tagline" data-i18n="intro.tagline">用双手种一座花园</div>
